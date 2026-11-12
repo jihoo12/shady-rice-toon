@@ -448,12 +448,17 @@ local function title_island(ctx)
     }
 end
 
+local cal = { offset = 0 } -- the calendar's month, from this one
+
 local function clock_island(ctx)
     local open = shell.is_open("toon-calendar")
     return island {
         key = "island:clock", id = "clock", gap = 8,
         background = open and P.accent or P.sun, rotate = open and -1.5 or 1.4,
-        on_click = function() shell.toggle("toon-calendar") end,
+        on_click = function()
+            if not shell.is_open("toon-calendar") then cal.offset = 0 end
+            shell.toggle("toon-calendar")
+        end,
         text(shell.date("%a %d"), { font = font("SemiBold", 9.5) }),
         text(shell.date("%H:%M"), { font = font("Bold", 12.5) }),
     }
@@ -860,6 +865,7 @@ shell.popup {
     anchor = { "top", "right" },
     margin = { top = BAR - 6, right = 2 },
     keyboard = "on_demand",
+    close_on_blur = true,
     input = "widgets",
     view = control_view,
     on_key = function(key)
@@ -869,13 +875,12 @@ shell.popup {
 
 -- ---- calendar ----------------------------------------------------------------
 
-local cal = { offset = 0 }
-
 shell.popup {
     name = "toon-calendar",
     anchor = { "top" },
     margin = { top = BAR - 6 },
     keyboard = "on_demand",
+    close_on_blur = true,
     input = "widgets",
     view = function(ctx)
         local now = os.date("*t")
@@ -1185,19 +1190,49 @@ local function shot_target()
     return nil
 end
 
--- Wait for the picture and say what became of it: without this a screenshot
--- looks like the picker just closing.
-local function shot_report(path, tries)
+local function read_line(path)
+    local f = io.open(path, "r")
+    if not f then return nil end
+    local line = f:read("l")
+    f:close()
+    return line
+end
+
+-- What wl-copy made of the picture: "ok", "fail", or nil while it runs.
+local function shot_copied(status, tries)
+    local result = read_line(status)
+    if result == "ok" or result == "fail" then
+        os.remove(status)
+        return result
+    end
+    if tries <= 0 then os.remove(status); return "fail" end
+    return nil
+end
+
+-- Wait for the picture, and for the clipboard, and say what became of them:
+-- without this a screenshot looks like the picker just closing.
+local function shot_report(path, status, tries)
     if exists(path) then
-        shell.log("screenshot saved: " .. path)
-        shell.notify("Snap! Screenshot saved",
-            (path:gsub("^" .. home, "~")) .. (HAVE.wlcopy and "\nCopied to the clipboard"
-                or "\nNot copied: wl-copy is not installed"), "Screenshot")
+        local copied = "none"
+        if HAVE.wlcopy then
+            copied = shot_copied(status, tries)
+            if not copied then
+                shell.after(100, function() shot_report(path, status, tries - 1) end)
+                return
+            end
+        end
+        shell.log("screenshot saved: " .. path .. " (clipboard: " .. copied .. ")")
+        local note = ({
+            ok = "\nCopied to the clipboard",
+            fail = "\nNot copied: wl-copy failed",
+            none = "\nNot copied: wl-copy is not installed",
+        })[copied]
+        shell.notify("Snap! Screenshot saved", (path:gsub("^" .. home, "~")) .. note, "Screenshot")
     elseif tries <= 0 then
         shell.log("screenshot failed: " .. path)
         shell.notify("Screenshot failed", "grim could not save " .. path, "Screenshot")
     else
-        shell.after(100, function() shot_report(path, tries - 1) end)
+        shell.after(100, function() shot_report(path, status, tries - 1) end)
     end
 end
 
@@ -1207,16 +1242,22 @@ local function shot_capture(target)
     local dir = (os.getenv("XDG_PICTURES_DIR") or (home .. "/Pictures")) .. "/Screenshots"
     local path = string.format("%s/Screenshot from %s.png", dir, os.date("%Y-%m-%d %H-%M-%S"))
     local part = dir .. "/.screenshot.part"
+    local status = dir .. "/.screenshot.copy"
     local what = target.screen and string.format("-o %q", Shot.output)
         or string.format("-g '%d,%d %dx%d'", Shot.ox + target.x, Shot.oy + target.y, target.w, target.h)
     shell.log("screenshot: " .. what)
     shell.close("toon-shot")
     -- Once this surface is off the screen.
     shell.after(150, function()
+        os.remove(status)
+        -- wl-copy forks to serve the clipboard; its exit says whether it took
+        -- the picture.
         shell.spawn(string.format("mkdir -p %q && grim %s %q && mv -f %q %q%s",
             dir, what, part, part, path,
-            HAVE.wlcopy and string.format(" && wl-copy < %q", path) or ""))
-        shot_report(path, 50)
+            HAVE.wlcopy and string.format(
+                " && if wl-copy < %q >/dev/null; then echo ok > %q; else echo fail > %q; fi",
+                path, status, status) or ""))
+        shot_report(path, status, 50)
     end)
 end
 
