@@ -117,14 +117,19 @@ void main() {
         }
     }
 
-    // The sun: by day high on the right, at dusk low and orange.
-    float sun_on = day + dusk;
-    if (sun_on > 0.0) {
+    // The sun: by day high on the right, at dusk low and orange. As night
+    // comes it sets behind the hills (and rises from them at dawn) rather
+    // than fading, so it never shows as a ghost; the moon waits for it to
+    // be gone before it comes up.
+    float sun_set = smoothstep(0.0, 0.5, night);
+    float moon_up = smoothstep(0.5, 1.0, night);
+    float sun_on = 1.0;
+    if (sun_set < 1.0) {
         float r = H * 0.075;
-        vec2 c = vec2(W * 0.80, H * mix(0.22, 0.50, dusk));
+        vec2 c = vec2(W * 0.80, H * mix(mix(0.22, 0.50, dusk), 1.1, sun_set));
         vec2 q = p - c;
         float dist = length(q);
-        vec3 gold = mix(vec3(1.0, 0.84, 0.25), vec3(1.0, 0.58, 0.30), dusk);
+        vec3 gold = mix(vec3(1.0, 0.84, 0.25), vec3(1.0, 0.58, 0.30), clamp(dusk + night, 0.0, 1.0));
         // Rays that turn slowly and breathe.
         float n = 12.0;
         float ang = atan(q.y, q.x) + t * 0.12;
@@ -147,16 +152,16 @@ void main() {
     }
 
     // The moon: a sleepy crescent at night.
-    if (night > 0.0) {
+    if (moon_up > 0.0) {
         float r = H * 0.07;
-        vec2 c = vec2(W * 0.84, H * 0.2);
+        vec2 c = vec2(W * 0.84, H * mix(1.1, 0.2, moon_up));
         vec2 q = p - c;
         float d = max(length(q) - r, -(length(q - vec2(r * 0.55, -r * 0.3)) - r * 0.85));
-        col = inked(col, d, vec3(1.0, 0.93, 0.62), night);
+        col = inked(col, d, vec3(1.0, 0.93, 0.62), 1.0);
         // A closed eye.
         vec2 eq = q - vec2(-r * 0.48, -r * 0.05);
         float eye = max(abs(length(eq) - r * 0.17) - 1.2, -eq.y);
-        col = mix(col, u_ink.rgb, inside(eye) * night);
+        col = mix(col, u_ink.rgb, inside(eye));
     }
 
     // Clouds, drifting right and coming round again.
