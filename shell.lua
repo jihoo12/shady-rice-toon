@@ -211,8 +211,11 @@ local SESSION = {
 -- the `wallpaper` option), a picture saved as ~/.config/shady/wallpaper.jpg,
 -- a folder wallpapers/ (a slideshow), or `shady-wallpaper set`.
 --
--- The sky moves (the sun's rays, the clouds), which redraws the screen on
--- every frame. TOON_STILL=1 stops it: the sky is then drawn once.
+-- The sky moves (the sun's rays, the clouds), and every frame of it redraws
+-- the whole screen, in the shell and then in the compositor. Nothing in it
+-- moves faster than a few pixels a second, so it is drawn at most SKY_FPS
+-- times a second, fewer on battery: TOON_SKY_FPS sets one rate for both,
+-- and TOON_STILL=1 stops it (the sky is then drawn once).
 
 local home = os.getenv("HOME") or ""
 local function exists(path)
@@ -237,6 +240,15 @@ local function sky_shader()
     out:close()
     return shell.shader(still)
 end
+
+local SKY_FPS, SKY_FPS_BATTERY = 20, 8
+local function sky_pace(status)
+    if not shell.shader_fps then return end -- a shady-shell without the cap
+    local fixed = tonumber(os.getenv("TOON_SKY_FPS") or "")
+    local fps = fixed or (status == "Discharging" and SKY_FPS_BATTERY or SKY_FPS)
+    if shell.shader_fps() ~= fps then shell.shader_fps(fps) end
+end
+sky_pace(nil) -- until the bar has read the battery
 
 -- The hour the sky shows: the clock's, or TOON_HOUR (for trying them out).
 local function hour()
@@ -500,6 +512,7 @@ local function status_island(ctx)
         }
     end
     local level, status = sys.battery()
+    sky_pace(status) -- unplugged or plugged in: the sky's pace follows
     if level then items[#items + 1] = battery_badge(level, status) end
     local open = shell.is_open("toon-control")
     local power_hover = ctx.hovered == "bar:power"

@@ -34,7 +34,9 @@ in halftone dots like a comic book.
 |---|---|
 | ![Dusk](docs/sky-dusk.jpg) | ![Night](docs/sky-night.jpg) |
 
-The moving sky redraws the screen on every frame. `TOON_STILL=1` stops the
+Each frame of the moving sky redraws the whole screen, so it moves at most
+20 times a second, and 8 on battery (`TOON_SKY_FPS=n` picks one rate for
+both; it needs a shady-shell with `shell.shader_fps`). `TOON_STILL=1` stops the
 clock: the sky is then drawn once and costs nothing afterwards (it still
 changes with the hour). `TOON_HOUR=19` shows a given hour instead of the
 clock's.
