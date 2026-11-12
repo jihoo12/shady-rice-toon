@@ -211,11 +211,12 @@ local SESSION = {
 -- the `wallpaper` option), a picture saved as ~/.config/shady/wallpaper.jpg,
 -- a folder wallpapers/ (a slideshow), or `shady-wallpaper set`.
 --
--- The sky moves (the sun's rays, the clouds), and every frame of it redraws
--- the whole screen, in the shell and then in the compositor. Nothing in it
--- moves faster than a few pixels a second, so it is drawn at most SKY_FPS
--- times a second, fewer on battery: TOON_SKY_FPS sets one rate for both,
--- and TOON_STILL=1 stops it (the sky is then drawn once).
+-- The sky stands still: it is drawn once, and again every few minutes to
+-- follow the hour, so day, dusk and night come in their time and the GPU
+-- rests in between. TOON_SKY_MOVING=1 brings back the clock (turning rays,
+-- drifting clouds, a blinking sun); every frame of that redraws the screen,
+-- so it is drawn at most SKY_FPS times a second, fewer on battery
+-- (TOON_SKY_FPS sets one rate for both).
 
 local home = os.getenv("HOME") or ""
 local function exists(path)
@@ -224,10 +225,13 @@ local function exists(path)
     return false
 end
 
+local SKY_MOVING = os.getenv("TOON_SKY_MOVING") == "1"
+
 local function sky_shader()
     local path = HERE .. "/shaders/toon.frag"
-    if os.getenv("TOON_STILL") ~= "1" then return shell.shader(path) end
-    -- The same sky with the clock stopped: without u_time it is not animated.
+    if SKY_MOVING then return shell.shader(path) end
+    -- The same sky with its clock stopped: without u_time it is not animated.
+    -- (Edits to toon.frag show after the shell reloads.)
     local f = io.open(path, "r")
     if not f then return shell.shader(path) end
     local source = f:read("a"):gsub("uniform float u_time;", "const float u_time = 0.0;")
@@ -243,7 +247,7 @@ end
 
 local SKY_FPS, SKY_FPS_BATTERY = 20, 8
 local function sky_pace(status)
-    if not shell.shader_fps then return end -- a shady-shell without the cap
+    if not SKY_MOVING or not shell.shader_fps then return end
     local fixed = tonumber(os.getenv("TOON_SKY_FPS") or "")
     local fps = fixed or (status == "Discharging" and SKY_FPS_BATTERY or SKY_FPS)
     if shell.shader_fps() ~= fps then shell.shader_fps(fps) end
@@ -512,7 +516,7 @@ local function status_island(ctx)
         }
     end
     local level, status = sys.battery()
-    sky_pace(status) -- unplugged or plugged in: the sky's pace follows
+    sky_pace(status) -- a moving sky's pace follows the power
     if level then items[#items + 1] = battery_badge(level, status) end
     local open = shell.is_open("toon-control")
     local power_hover = ctx.hovered == "bar:power"

@@ -34,12 +34,13 @@ in halftone dots like a comic book.
 |---|---|
 | ![Dusk](docs/sky-dusk.jpg) | ![Night](docs/sky-night.jpg) |
 
-Each frame of the moving sky redraws the whole screen, so it moves at most
-20 times a second, and 8 on battery (`TOON_SKY_FPS=n` picks one rate for
-both; it needs a shady-shell with `shell.shader_fps`). `TOON_STILL=1` stops the
-clock: the sky is then drawn once and costs nothing afterwards (it still
-changes with the hour). `TOON_HOUR=19` shows a given hour instead of the
-clock's.
+The sky stands still and follows the clock: it is drawn again every few
+minutes, so day turns to dusk and night without the GPU working in between.
+`TOON_SKY_MOVING=1` brings back the turning rays, drifting clouds and the
+blinking sun; each frame of that redraws the screen, so it moves at most 20
+times a second, and 8 on battery (`TOON_SKY_FPS=n` picks one rate for both;
+it needs a shady-shell with `shell.shader_fps`). `TOON_HOUR=19` shows a
+given hour instead of the clock's.
 
 As with Tide, the sky stays until something replaces it through
 shady-shell's wallpaper manager: a picture chosen in Gloam's Settings, one
